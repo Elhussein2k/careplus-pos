@@ -1,38 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
-import * as XLSX from 'xlsx'; 
-import { GoogleGenerativeAI } from "@google/generative-ai"; 
-// Import Icons
 import { 
-  LayoutDashboard, ShoppingCart, Package, Users, LogOut, Search, Bell, 
-  Plus, Pencil, Trash2, FileText, RotateCcw, User, X, Upload, Printer, 
-  Check, AlertTriangle, Info, UserCog, CalendarCheck, Truck, ShoppingBag, 
-  Tags, Percent, DollarSign, HelpCircle, BookOpen, UserCircle, Boxes, Globe, Shield
+  LayoutDashboard, ShoppingCart, Users, LogOut, Search, 
+  Plus, Pencil, Trash2, X, Eye, FilePlus, CreditCard, 
+  Globe, Truck, ShoppingBag, Check, Boxes, AlertTriangle
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
 import './style.css'; 
-
-// --- 🔑 CONFIG ---
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; 
-
-// --- RBAC PERMISSIONS DEFINITION ---
-const PERMISSIONS = {
-  superadmin: ['superadmin_dashboard', 'all_tenants', 'subscriptions'],
-  manager: ['pos', 'dashboard', 'inventory', 'suppliers', 'customers', 'pharmacists', 'reports'],
-  pharmacist: ['pos', 'customers'] // Pharmacist limited access
-};
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [userRole, setUserRole] = useState(null); 
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (session) fetchUserProfile(session);
+        else setLoadingProfile(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        if (session) fetchUserProfile(session);
+        else {
+            setUserRole(null);
+            setLoadingProfile(false);
+        }
+    });
     return () => subscription.unsubscribe();
   }, []);
 
+  async function fetchUserProfile(session) {
+      try {
+          // 1. FAILSAFE: Force Superadmin for specific email
+          if (session.user.email === 'elmoussa2k@gmail.com') {
+              setUserRole('superadmin');
+              setLoadingProfile(false);
+              return;
+          }
+
+          // 2. Normal DB Fetch
+          const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+          if (data) setUserRole(data.role);
+          else setUserRole('manager'); // Fallback
+      } catch (e) { console.error(e); } 
+      finally { setLoadingProfile(false); }
+  }
+
+  if (loadingProfile) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>Loading Profile...</div>;
   if (!session) return <LoginScreen />;
-  return <MainApp session={session} />;
+  return <MainApp session={session} userRole={userRole} />;
 }
 
 // --- 🔐 LOGIN SCREEN ---
@@ -45,429 +62,356 @@ function LoginScreen() {
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
-    setLoading(false);
+    if (error) { setError(error.message); setLoading(false); }
   }
 
   return (
     <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f1f5f9' }}>
-      <div style={{ background: 'white', padding: '40px', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-        <h2 style={{ textAlign: 'center', color: '#1c2434', marginBottom: '20px', fontWeight: 'bold' }}>💊 CarePlus SaaS</h2>
-        {error && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px', borderRadius: '6px', marginBottom: '15px' }}>{error}</div>}
+      <div style={{ background: 'white', padding: '40px', borderRadius: '12px', width: '400px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+        <h2 style={{ textAlign: 'center', marginBottom: '20px', color:'#1e293b' }}>💊 CarePlus Login</h2>
+        {error && <div style={{background: '#fee2e2', color: '#b91c1c', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '0.9rem'}}>{error}</div>}
         <form onSubmit={handleLogin}>
-          <div style={{marginBottom: '15px'}}><label style={{display:'block', marginBottom:'5px', fontWeight:'500'}}>Email</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', outline: 'none' }} placeholder="admin@careplus.com" /></div>
-          <div style={{marginBottom: '25px'}}><label style={{display:'block', marginBottom:'5px', fontWeight:'500'}}>Password</label><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '6px', outline: 'none' }} placeholder="••••••••" /></div>
-          <button type="submit" disabled={loading} style={{ width: '100%', padding: '12px', background: '#3c50e0', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}>{loading ? 'Signing In...' : 'Sign In'}</button>
+          <div style={{marginBottom: '15px'}}><label style={{display:'block', marginBottom:'5px', color:'#64748b'}}>Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '10px', border:'1px solid #e2e8f0', borderRadius:'6px' }} /></div>
+          <div style={{marginBottom: '25px'}}><label style={{display:'block', marginBottom:'5px', color:'#64748b'}}>Password</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: '10px', border:'1px solid #e2e8f0', borderRadius:'6px' }} /></div>
+          <button type="submit" disabled={loading} className="btn-primary" style={{width:'100%', justifyContent:'center'}}>{loading ? 'Signing In...' : 'Sign In'}</button>
         </form>
       </div>
     </div>
   );
 }
 
-// --- 🚀 MAIN APP LAYOUT ---
-function MainApp({ session }) {
-  // --- STATE MANAGEMENT ---
-  const [userRole, setUserRole] = useState('manager'); // Default Role (For Demo)
-  const [activeTab, setActiveTab] = useState('pos'); 
-  const [medicines, setMedicines] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [suppliers, setSuppliers] = useState([]); // NEW: Supplier State
-  const [cart, setCart] = useState([]); 
-  const [globalSearch, setGlobalSearch] = useState(""); 
+// --- 🚀 MAIN APP ---
+function MainApp({ session, userRole }) {
+  const [activeTab, setActiveTab] = useState(userRole === 'pharmacist' ? 'pos' : (userRole === 'superadmin' ? 'superadmin' : 'dashboard'));
   
-  // App Logic States
-  const [selectedCustomer, setSelectedCustomer] = useState(null); 
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [showCustList, setShowCustList] = useState(false);
-  const [recentInvoices, setRecentInvoices] = useState([]);
-  const [showReturnsModal, setShowReturnsModal] = useState(false);
-  const [expandedInvoice, setExpandedInvoice] = useState(null);
-  const [invoiceItems, setInvoiceItems] = useState([]);
-  const [stats, setStats] = useState({ revenue: 0, transactions: 0, lowStock: 0 });
-  const [chartData, setChartData] = useState([]); 
+  // States
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierCategories, setSupplierCategories] = useState([]);
+  const [purchases, setPurchases] = useState([]);
+  const [tenants, setTenants] = useState([]); 
+  const [inventory, setInventory] = useState([]); // Basic Inventory Mock
   
   // Modals & Forms
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); 
-  const [showBatchModal, setShowBatchModal] = useState(false);
-  const [batchProduct, setBatchProduct] = useState(null);
-  const [batchForm, setBatchForm] = useState({ id: null, batchNumber: '', expiry: '', cost: '', price: '', qty: '' });
-  
-  // Supplier Form
   const [showSupplierModal, setShowSupplierModal] = useState(false);
-  const [supplierForm, setSupplierForm] = useState({ id: null, name: '', contact: '', email: '', address: '' });
-
-  // Receipt
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [lastInvoice, setLastInvoice] = useState(null);
-
-  // Alerts
-  const [alertState, setAlertState] = useState({ show: false, title: '', message: '', type: 'info', onConfirm: null });
-  function showAlert(title, message, type = 'info', onConfirm = null) { setAlertState({ show: true, title, message, type, onConfirm }); }
-  function closeAlert() { setAlertState({ ...alertState, show: false }); }
-  function confirmAlert() { if (alertState.onConfirm) alertState.onConfirm(); closeAlert(); }
+  const [showViewSupplier, setShowViewSupplier] = useState(false); // View Modal
+  const [supplierForm, setSupplierForm] = useState({});
+  
+  const [showPurchaseWizard, setShowPurchaseWizard] = useState(false);
+  const [purchaseForm, setPurchaseForm] = useState({ supplierId: '', invoiceNo: '', items: [], paymentMode: '', date: new Date().toISOString().split('T')[0] });
+  const [purchaseStep, setPurchaseStep] = useState(1);
+  
+  const [showTenantWizard, setShowTenantWizard] = useState(false);
+  const [tenantForm, setTenantForm] = useState({ name: '', email: '', plan: 'STANDARD' });
 
   useEffect(() => {
-    fetchAllData();
-    fetchDashboardData();
-    // In a real app, we would fetch the user role from 'profiles' table here
+    // MOCK DATA LOAD
+    setSuppliers([
+        { id: 1, name: 'Global Meds', email: 'info@global.com', mobile: '0501234567', country: 'Saudi Arabia', city: 'Riyadh', status: true, category: 'Registered', brand: 'Pfizer' },
+        { id: 2, name: 'Fast Pharma', email: 'ali@fast.com', mobile: '0559876543', country: 'UAE', city: 'Dubai', status: false, category: 'Unregistered', brand: 'Novartis' }
+    ]);
+    setPurchases([
+        { id: 101, invoiceNo: 'INV-001', supplier: 'Global Meds', date: '2025-01-20', amount: 5000, createdBy: 'Dr. House' }
+    ]);
+    setTenants([
+        { id: 'uuid-1', company_name: 'CarePlus Riyadh', plan: 'ENTERPRISE', status: 'ACTIVE', revenue: 12400 },
+        { id: 'uuid-2', company_name: 'City Pharmacy', plan: 'STANDARD', status: 'ACTIVE', revenue: 8200 }
+    ]);
+    setInventory([
+        { id: 1, name: 'Panadol Extra', stock: 150, price: 12.50 },
+        { id: 2, name: 'Augmentin 1g', stock: 40, price: 45.00 }
+    ]);
+    setSupplierCategories(['Registered', 'Unregistered', 'International']);
   }, []);
 
   async function handleLogout() { await supabase.auth.signOut(); }
 
-  // --- DATA FETCHING ---
-  async function fetchAllData() {
-    // 1. Fetch Customers
-    supabase.from('customers').select('*').limit(100).then(({ data }) => { if (data) setCustomers(data); });
-    
-    // 2. Fetch Suppliers (Mock Table for now if not exists)
-    // We assume a 'suppliers' table exists. If not, we use empty array.
-    const { data: supps } = await supabase.from('suppliers').select('*').limit(50);
-    if (supps) setSuppliers(supps);
-
-    // 3. Products (Progressive)
-    let allProducts = [];
-    let from = 0;
-    const step = 1000;
-    while (true) {
-        const { data, error } = await supabase.from('products').select(`*, product_batches (id, batch_number, expiry_date, sale_price, cost_price, inventory ( id, quantity_boxes ))`).order('name').range(from, from + step - 1);
-        if (error || !data || data.length === 0) break;
-        allProducts = [...allProducts, ...data];
-        if (data.length < step) break;
-        from += step;
-    }
-    setMedicines(allProducts);
+  // --- LOGIC: SUPPLIERS ---
+  const handleSaveSupplier = () => {
+      if(supplierForm.id) setSuppliers(prev => prev.map(s => s.id === supplierForm.id ? supplierForm : s));
+      else setSuppliers(prev => [...prev, { ...supplierForm, id: Date.now(), status: true }]);
+      setShowSupplierModal(false);
+  };
+  
+  const toggleSupplierStatus = (id) => {
+      setSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: !s.status } : s));
   }
 
-  async function fetchDashboardData() {
-    const { data: sales } = await supabase.from('invoices').select('*').order('created_at', { ascending: false }).limit(50);
-    if (!sales) return;
-    const today = new Date();
-    const todaysSales = sales.filter(inv => new Date(inv.created_at).toDateString() === today.toDateString());
-    const totalRev = todaysSales.reduce((sum, inv) => sum + (inv.final_amount_paid || 0), 0);
-    const { data: lowStockItems } = await supabase.from('inventory').select('id').lt('quantity_boxes', 5);
-    setStats({ revenue: totalRev, transactions: todaysSales.length, lowStock: lowStockItems?.length || 0 });
-    setRecentInvoices(sales);
-    setChartData([{name:'Mon',sales:4000},{name:'Tue',sales:3000},{name:'Wed',sales:5000},{name:'Thu',sales:2780},{name:'Fri',sales:1890},{name:'Sat',sales:6390},{name:'Sun',sales:3490}]);
-  }
+  // --- LOGIC: PURCHASES ---
+  const addPurchaseItem = (item) => {
+      const total = (parseFloat(item.cost) * parseInt(item.qty));
+      const vatVal = total * (parseFloat(item.vat || 0) / 100);
+      setPurchaseForm(prev => ({ ...prev, items: [...prev.items, { ...item, total, vatValue: vatVal, final: total + vatVal }] }));
+  };
+  
+  const submitPurchase = () => {
+      const total = purchaseForm.items.reduce((s,i)=>s+i.final,0);
+      setPurchases(prev=>[...prev, {id: Date.now(), invoiceNo: 'NEW', supplier: 'Global', date: purchaseForm.date, amount: total, createdBy:'Me'}]); 
+      setShowPurchaseWizard(false);
+  };
 
-  // --- NEW: SUPPLIER MANAGEMENT ---
-  async function handleSaveSupplier() {
-    if (!supplierForm.name) return showAlert("Error", "Supplier Name is required", "error");
-    try {
-        if (supplierForm.id) {
-            // Update
-            await supabase.from('suppliers').update({ name: supplierForm.name, contact_person: supplierForm.contact, email: supplierForm.email, address: supplierForm.address }).eq('id', supplierForm.id);
-        } else {
-            // Insert
-            await supabase.from('suppliers').insert([{ tenant_id: '11111111-1111-1111-1111-111111111111', name: supplierForm.name, contact_person: supplierForm.contact, email: supplierForm.email, address: supplierForm.address }]);
-        }
-        showAlert("Success", "Supplier saved successfully!", "success");
-        setShowSupplierModal(false);
-        // Refresh suppliers list
-        const { data } = await supabase.from('suppliers').select('*');
-        if (data) setSuppliers(data);
-    } catch (e) { showAlert("Error", e.message, "error"); }
-  }
-
-  function deleteSupplier(id) {
-      showAlert("Confirm Delete", "Are you sure you want to remove this supplier?", "confirm", async () => {
-          await supabase.from('suppliers').delete().eq('id', id);
-          setSuppliers(prev => prev.filter(s => s.id !== id));
-          showAlert("Deleted", "Supplier removed.", "success");
-      });
-  }
-
-  // --- EXISTING LOGIC (POS, Returns, Upload) ---
-  // (Keeping these concise to save space, logic is same as previous versions)
-  async function addToCart(p, b, i, s) { /* ... same as before ... */ 
-      if (s <= 0) return showAlert("Out of Stock", "Item unavailable.", "error");
-      setCart(prev => [...prev, { productId: p.id, name: p.name, batchId: b.id, price: b.sale_price, qty: 1 }]);
-  }
-  function removeFromCart(id) { setCart(prev => prev.filter(i => i.batchId !== id)); }
-  async function handleCheckout() { /* ... same checkout logic ... */ 
-      if (cart.length === 0) return showAlert("Empty", "Cart is empty.", "error");
-      const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-      setLastInvoice({ id: "INV-NEW", date: new Date().toLocaleString(), customer: "Walk-in", items: [...cart], total });
-      setShowReceipt(true); setCart([]); 
-  }
-  async function handleFileUpload(e) { /* ... same upload logic ... */ alert("Upload logic placeholder for brevity"); }
-
-  // --- RBAC HELPER ---
-  const hasPermission = (tab) => {
-      if (userRole === 'superadmin') return true; 
-      // Mapping tabs to permissions
-      if (tab === 'pos') return true; // Everyone sees POS
-      if (userRole === 'pharmacist' && !['pos', 'customers'].includes(tab)) return false;
-      return true;
+  // --- LOGIC: TENANTS ---
+  const handleCreateTenant = () => {
+      setTenants(prev => [...prev, { id: Date.now(), company_name: tenantForm.name, plan: tenantForm.plan, status: 'ACTIVE', revenue: 0 }]);
+      setShowTenantWizard(false);
+      alert("Pharmacy Created Successfully!");
   };
 
   // --- RENDER CONTENT ---
   const renderContent = () => {
-    // 1. SUPERADMIN DASHBOARD
+    // 1. SUPERADMIN - SUBSCRIPTIONS
     if (activeTab === 'superadmin') return (
-        <div style={{padding: '20px'}}>
-            <h2 style={{marginBottom:'20px'}}>🌍 Superadmin God View</h2>
-            <div className="stats-grid">
-                <div className="sa-card">
-                    <div className="sa-label">Total Tenants</div>
-                    <div className="sa-stat">124</div>
-                    <div style={{fontSize:'0.8rem', color:'#4ade80'}}>+12 this month</div>
-                </div>
-                <div className="sa-card">
-                    <div className="sa-label">Total Platform MRR</div>
-                    <div className="sa-stat">$42,500</div>
-                    <div style={{fontSize:'0.8rem', color:'#4ade80'}}>+8.5% growth</div>
-                </div>
-                <div className="sa-card">
-                    <div className="sa-label">Active Subscriptions</div>
-                    <div className="sa-stat">118</div>
-                    <div style={{fontSize:'0.8rem', color:'#facc15'}}>6 pending renewal</div>
-                </div>
+        <div style={{padding: '2rem'}}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2rem'}}>
+                <h2>🌍 Subscription Management</h2>
+                <button className="btn-primary" onClick={() => setShowTenantWizard(true)}>
+                    <Globe size={18}/> Create New Pharmacy
+                </button>
             </div>
-            
-            <h3 style={{marginTop:'30px'}}>Tenant Overview</h3>
+            <div className="form-grid" style={{gridTemplateColumns:'repeat(3, 1fr)', marginBottom:'30px'}}>
+                <div style={{background:'#1e293b', color:'white', padding:'20px', borderRadius:'8px'}}><h3>{tenants.length}</h3><p>Active Pharmacies</p></div>
+                <div style={{background:'#1e293b', color:'white', padding:'20px', borderRadius:'8px'}}><h3>${tenants.reduce((s,t)=>s+t.revenue,0).toLocaleString()}</h3><p>Total Revenue</p></div>
+            </div>
             <div className="table-container">
                 <table className="modern-table">
-                    <thead><tr><th>Pharmacy Name</th><th>Admin Email</th><th>Plan</th><th>Status</th><th>Revenue</th></tr></thead>
+                    <thead><tr><th>Pharmacy Name</th><th>Plan</th><th>Status</th><th>Revenue</th><th>Actions</th></tr></thead>
                     <tbody>
-                        <tr><td>CarePlus Riyadh</td><td>admin@careplus.sa</td><td><span className="status-badge status-active">Enterprise</span></td><td>Active</td><td>$12,400</td></tr>
-                        <tr><td>MediLife Jeddah</td><td>mgr@medilife.com</td><td><span className="status-badge status-active">Pro</span></td><td>Active</td><td>$8,200</td></tr>
-                        <tr><td>HealthFirst Dammam</td><td>contact@healthfirst.sa</td><td><span className="status-badge status-danger">Basic</span></td><td>Expiring</td><td>$2,100</td></tr>
+                        {tenants.map(t => (
+                            <tr key={t.id}>
+                                <td style={{fontWeight:'bold'}}>{t.company_name}</td>
+                                <td><span className="role-badge" style={{background:'#3c50e0', color:'white'}}>{t.plan}</span></td>
+                                <td><span className="role-badge" style={{background:'#10b981', color:'white'}}>{t.status}</span></td>
+                                <td>${t.revenue.toLocaleString()}</td>
+                                <td><button className="btn-primary" style={{padding:'5px 10px', fontSize:'0.7rem'}}>Manage</button></td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
         </div>
     );
 
-    // 2. SUPPLIERS MODULE
+    // 2. SUPPLIERS
     if (activeTab === 'suppliers') return (
-        <>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
+        <div style={{padding: '20px'}}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
                 <h2>Supplier Management</h2>
-                <button className="btn-primary" onClick={() => { setSupplierForm({id:null, name:'', contact:'', email:'', address:''}); setShowSupplierModal(true); }}>
-                    <Plus size={18}/> Add Supplier
-                </button>
+                <div style={{display:'flex', gap:'10px'}}>
+                   <button className="btn-primary" style={{background:'#64748b'}}>Categories</button>
+                   <button className="btn-primary" onClick={() => { setSupplierForm({}); setShowSupplierModal(true); }}><Plus size={18}/> Add Supplier</button>
+                </div>
             </div>
             <div className="table-container">
                 <table className="modern-table">
-                    <thead><tr><th>Supplier Name</th><th>Contact Person</th><th>Email</th><th>Address</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Country</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody>
-                        {suppliers.length === 0 ? <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No suppliers found. Add one!</td></tr> : 
-                        suppliers.map(s => (
-                            <tr key={s.id}>
-                                <td style={{fontWeight:'600'}}>{s.name}</td>
-                                <td>{s.contact_person || '-'}</td>
-                                <td>{s.email || '-'}</td>
-                                <td>{s.address || '-'}</td>
+                        {suppliers.map(s => (
+                            <tr key={s.id} style={{opacity: s.status ? 1 : 0.5}}>
+                                <td><b>{s.name}</b><br/><small>{s.category}</small></td>
+                                <td>{s.email}</td>
+                                <td>{s.mobile}</td>
+                                <td>{s.country}</td>
                                 <td>
-                                    <button className="action-btn btn-edit" onClick={() => { setSupplierForm(s); setShowSupplierModal(true); }}><Pencil size={16}/></button>
-                                    <button className="action-btn btn-delete" onClick={() => deleteSupplier(s.id)}><Trash2 size={16}/></button>
+                                    <label className="switch">
+                                        <input type="checkbox" checked={s.status} onChange={() => toggleSupplierStatus(s.id)}/>
+                                        <span className="slider"></span>
+                                    </label>
+                                </td>
+                                <td>
+                                    <button onClick={() => { setSupplierForm(s); setShowViewSupplier(true); }} style={{border:'none', background:'none', cursor:'pointer', marginRight:'10px'}}><Eye size={18} color="#64748b"/></button>
+                                    <button onClick={() => { setSupplierForm(s); setShowSupplierModal(true); }} style={{border:'none', background:'none', cursor:'pointer'}}><Pencil size={18} color="#3c50e0"/></button>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
-        </>
+        </div>
     );
 
-    // 3. CUSTOMER MODULE (Expanded)
-    if (activeTab === 'customers') return (
-        <>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
-                <h2>Customer Directory</h2>
-                <button className="btn-primary"><Plus size={18}/> Add Customer</button>
+    // 3. PURCHASES
+    if (activeTab === 'purchases') return (
+        <div style={{padding: '20px'}}>
+            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+                <h2>Purchase Management</h2>
+                <button className="btn-primary" onClick={() => { setShowPurchaseWizard(true); setPurchaseStep(1); }}><FilePlus size={18}/> New Purchase</button>
             </div>
             <div className="table-container">
                 <table className="modern-table">
-                    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Total Purchases</th><th>Status</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Invoice #</th><th>Supplier</th><th>Date</th><th>Amount</th><th>Created By</th></tr></thead>
                     <tbody>
-                        {customers.map(c => (
-                            <tr key={c.id}>
-                                <td style={{fontWeight:'600'}}>{c.full_name}</td>
-                                <td>{c.phone}</td>
-                                <td>{c.email || '-'}</td>
-                                <td style={{fontWeight:'bold'}}>$0.00</td>
-                                <td><span className="status-badge status-active">Active</span></td>
-                                <td>
-                                    <button className="action-btn btn-edit"><Pencil size={16}/></button>
-                                </td>
+                        {purchases.map(p => (
+                            <tr key={p.id}>
+                                <td>{p.invoiceNo}</td><td>{p.supplier}</td><td>{p.date}</td><td><b>${p.amount?.toFixed(2)}</b></td><td>{p.createdBy}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
-        </>
+        </div>
     );
 
-    // 4. POS (Standard)
+    // 4. POS (Available to All)
     if (activeTab === 'pos') return (
-        <div className="pos-layout">
+         <div className="pos-layout">
             <div className="pos-products">
-               <div style={{fontWeight:'bold', marginBottom:'15px'}}>Products</div>
-               <div className="product-grid">
-                  {medicines.slice(0, 50).map(m => (
-                      <div key={m.id} className="product-card" onClick={() => addToCart(m, m.product_batches[0], null, 10)}>
-                          <strong>{m.name}</strong>
-                          <div style={{fontSize:'0.8rem'}}>{m.generic_name}</div>
-                          <div className="price-tag">${m.public_price}</div>
+               <div style={{padding:'20px', fontWeight:'bold'}}>Select Products</div>
+               <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'15px', padding:'20px'}}>
+                  {inventory.map(m => (
+                      <div key={m.id} className="product-card">
+                          <strong>{m.name}</strong><br/>
+                          <span style={{color:'#64748b'}}>{m.stock} Left</span>
+                          <div style={{marginTop:'10px', fontWeight:'bold', color:'#3c50e0'}}>${m.price}</div>
                       </div>
                   ))}
                </div>
             </div>
             <div className="pos-cart">
-               <div className="cart-header">Cart</div>
-               <div className="cart-items">
-                  {cart.map((c, i) => <div key={i} className="cart-item">{c.name} - ${c.price}</div>)}
-               </div>
-               <div className="cart-footer">
-                   <button className="pay-btn" onClick={handleCheckout}>Pay Now</button>
-               </div>
+               <div style={{padding:'20px', borderBottom:'1px solid #eee', fontWeight:'bold'}}>Current Cart</div>
+               <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#aaa'}}>Cart is Empty</div>
+               <div style={{padding:'20px', borderTop:'1px solid #eee'}}><button className="btn-primary" style={{width:'100%', justifyContent:'center'}}>Pay Now</button></div>
             </div>
-        </div>
+         </div>
     );
 
-    // Default Fallback
-    return <div style={{textAlign:'center', marginTop:'50px'}}>🚧 Module Under Construction</div>;
+    return <div style={{padding:'2rem'}}>Select a module.</div>;
   };
 
   return (
     <div className="app-layout">
-      {/* SIDEBAR */}
       <aside className="sidebar">
-        <div className="logo-area">
-            <span style={{color:'#3c50e0'}}>💊</span> CarePlus
-        </div>
-        
-        {/* DEV ONLY: ROLE SWITCHER */}
-        <div style={{padding:'10px', background:'#333a48', margin:'10px', borderRadius:'6px'}}>
-            <small style={{color:'#94a3b8', display:'block', marginBottom:'5px'}}>DEV: Switch Role</small>
-            <div style={{display:'flex', gap:'5px'}}>
-                <button onClick={() => setUserRole('superadmin')} style={{fontSize:'0.7rem', padding:'4px', background: userRole==='superadmin'?'#7e22ce':'#475569', color:'white', border:'none', borderRadius:'3px'}}>Super</button>
-                <button onClick={() => setUserRole('manager')} style={{fontSize:'0.7rem', padding:'4px', background: userRole==='manager'?'#ea580c':'#475569', color:'white', border:'none', borderRadius:'3px'}}>Mgr</button>
-                <button onClick={() => setUserRole('pharmacist')} style={{fontSize:'0.7rem', padding:'4px', background: userRole==='pharmacist'?'#059669':'#475569', color:'white', border:'none', borderRadius:'3px'}}>Pharma</button>
-            </div>
-        </div>
-
+        <div className="logo-area"><span style={{color:'#3c50e0'}}>💊</span> CarePlus</div>
         <nav className="nav-links">
           {/* SUPERADMIN ONLY */}
           {userRole === 'superadmin' && (
-              <div className={`nav-item ${activeTab === 'superadmin' ? 'active' : ''}`} onClick={() => setActiveTab('superadmin')}>
-                <Globe size={20} className="nav-icon"/> Global Dashboard
-              </div>
-          )}
-
-          {/* SHARED MODULES */}
-          <div className={`nav-item ${activeTab === 'pos' ? 'active' : ''}`} onClick={() => setActiveTab('pos')}>
-            <ShoppingCart size={20} className="nav-icon"/> POS Terminal
-          </div>
-          
-          {/* MANAGER & SUPERADMIN MODULES */}
-          {['superadmin', 'manager'].includes(userRole) && (
               <>
-                <div className="nav-divider">MANAGEMENT</div>
-                <div className={`nav-item ${activeTab === 'suppliers' ? 'active' : ''}`} onClick={() => setActiveTab('suppliers')}>
-                    <Truck size={20} className="nav-icon"/> Suppliers
-                </div>
-                <div className={`nav-item ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => setActiveTab('customers')}>
-                    <Users size={20} className="nav-icon"/> Customers
-                </div>
-                <div className={`nav-item ${activeTab === 'stock_management' ? 'active' : ''}`} onClick={() => setActiveTab('stock_management')}>
-                    <Boxes size={20} className="nav-icon"/> Stock Mgmt
-                </div>
-                <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-                    <DollarSign size={20} className="nav-icon"/> Sales & Reports
-                </div>
+                <div className="nav-divider">PLATFORM</div>
+                <div className={`nav-item ${activeTab==='superadmin'?'active':''}`} onClick={()=>setActiveTab('superadmin')}><Globe size={18} className="nav-icon"/> Subscriptions</div>
               </>
           )}
 
-          <div className="nav-divider">SYSTEM</div>
-          <div className={`nav-item ${activeTab === 'account' ? 'active' : ''}`} onClick={() => setActiveTab('account')}>
-            <UserCircle size={20} className="nav-icon"/> My Account
-          </div>
+          {/* EVERYONE SEES POS */}
+          <div className="nav-divider">OPERATIONS</div>
+          <div className={`nav-item ${activeTab==='pos'?'active':''}`} onClick={()=>setActiveTab('pos')}><ShoppingCart size={18} className="nav-icon"/> POS Terminal</div>
+          
+          {/* MANAGER & SUPERADMIN ONLY */}
+          {['superadmin', 'manager'].includes(userRole) && (
+              <>
+                <div className={`nav-item ${activeTab==='purchases'?'active':''}`} onClick={()=>setActiveTab('purchases')}><ShoppingBag size={18} className="nav-icon"/> Purchases</div>
+                <div className="nav-divider">MANAGEMENT</div>
+                <div className={`nav-item ${activeTab==='suppliers'?'active':''}`} onClick={()=>setActiveTab('suppliers')}><Truck size={18} className="nav-icon"/> Suppliers</div>
+              </>
+          )}
         </nav>
-        <div style={{padding: '20px'}}><div className="nav-item" onClick={handleLogout} style={{color: '#ef4444'}}><LogOut size={20} className="nav-icon"/> Sign Out</div></div>
+        
+        {/* LOGOUT */}
+        <div style={{padding: '20px', borderTop:'1px solid #333a48'}}>
+            <div className="nav-item" onClick={handleLogout} style={{color: '#ef4444'}}><LogOut size={18} className="nav-icon"/> Sign Out</div>
+        </div>
       </aside>
-
-      {/* MAIN CONTENT */}
+      
       <main className="main-content">
         <header className="top-bar">
-          <div className="search-wrapper">
-             <Search size={18} color="#64748b"/>
-             <input className="search-input" placeholder="Search..." />
-          </div>
-          <div style={{display:'flex', gap:'20px', alignItems:'center'}}>
-             <span className={`role-badge role-${userRole}`}>{userRole.toUpperCase()}</span>
-             <div style={{width:40, height:40, background:'#e2e8f0', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center'}}>👤</div>
-          </div>
+             <h3>{activeTab === 'pos' ? 'POS Terminal' : activeTab.toUpperCase()}</h3>
+             <span className={`role-badge role-${userRole}`}>{userRole ? userRole.toUpperCase() : 'LOADING'}</span>
         </header>
-
-        <div className="content-scroll">
-           {renderContent()}
-        </div>
+        <div className="content-scroll">{renderContent()}</div>
       </main>
 
-      {/* --- MODALS --- */}
-      {/* 1. SUPPLIER MODAL */}
-      {showSupplierModal && (
-          <div className="modal-overlay">
-              <div className="modal-content">
-                  <h3>{supplierForm.id ? 'Edit Supplier' : 'Add New Supplier'}</h3>
-                  <div className="form-group" style={{marginBottom:'10px'}}>
-                      <label>Supplier Name *</label>
-                      <input type="text" value={supplierForm.name} onChange={e => setSupplierForm({...supplierForm, name: e.target.value})} />
-                  </div>
-                  <div className="form-grid">
-                      <div className="form-group">
-                          <label>Contact Person</label>
-                          <input type="text" value={supplierForm.contact} onChange={e => setSupplierForm({...supplierForm, contact: e.target.value})} />
-                      </div>
-                      <div className="form-group">
-                          <label>Email</label>
-                          <input type="email" value={supplierForm.email} onChange={e => setSupplierForm({...supplierForm, email: e.target.value})} />
-                      </div>
-                  </div>
-                  <div className="form-group" style={{marginBottom:'20px'}}>
-                      <label>Address</label>
-                      <input type="text" value={supplierForm.address} onChange={e => setSupplierForm({...supplierForm, address: e.target.value})} />
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                      <button className="btn-primary" onClick={handleSaveSupplier}>Save Supplier</button>
-                      <button onClick={() => setShowSupplierModal(false)} style={{marginLeft:'10px', background:'none', border:'none', cursor:'pointer'}}>Cancel</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* 2. ALERT MODAL (Reused) */}
-      {alertState.show && (
-        <div className="alert-overlay">
-           <div className="alert-box">
-              <div className={`alert-icon icon-${alertState.type === 'error' ? 'error' : alertState.type === 'success' ? 'success' : 'confirm'}`}>
-                 {alertState.type === 'error' ? <AlertTriangle/> : alertState.type === 'success' ? <Check/> : <Info/>}
-              </div>
-              <div className="alert-title">{alertState.title}</div>
-              <div className="alert-message">{alertState.message}</div>
-              <div className="alert-actions">
-                 {alertState.type === 'confirm' && <button className="btn-alert btn-cancel" onClick={closeAlert}>Cancel</button>}
-                 <button className="btn-alert btn-confirm" onClick={confirmAlert}>{alertState.type === 'confirm' ? 'Confirm' : 'OK'}</button>
-              </div>
-           </div>
+      {/* MODAL: SUPPLIER VIEW/EDIT */}
+      {(showSupplierModal || showViewSupplier) && (
+        <div className="modal-overlay">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h3>{showViewSupplier ? 'Supplier Details' : (supplierForm.id ? 'Edit Supplier' : 'Add Supplier')}</h3>
+                    <button className="close-btn" onClick={()=>{setShowSupplierModal(false); setShowViewSupplier(false)}}><X/></button>
+                </div>
+                {showViewSupplier ? (
+                    // VIEW MODE
+                    <div style={{lineHeight:'2rem'}}>
+                        <p><strong>Name:</strong> {supplierForm.name}</p>
+                        <p><strong>Email:</strong> {supplierForm.email}</p>
+                        <p><strong>Mobile:</strong> {supplierForm.mobile}</p>
+                        <p><strong>Address:</strong> {supplierForm.addr1}, {supplierForm.city}</p>
+                        <p><strong>Brand:</strong> {supplierForm.brand}</p>
+                        <div style={{marginTop:'20px', textAlign:'right'}}>
+                             <button className="btn-primary" onClick={()=>{setShowViewSupplier(false); setShowSupplierModal(true)}}>Edit This Profile</button>
+                        </div>
+                    </div>
+                ) : (
+                    // EDIT/ADD MODE
+                    <>
+                        <div className="form-grid">
+                            <div className="form-group"><label>Name</label><input value={supplierForm.name || ''} onChange={e=>setSupplierForm({...supplierForm, name:e.target.value})}/></div>
+                            <div className="form-group"><label>Email</label><input value={supplierForm.email || ''} onChange={e=>setSupplierForm({...supplierForm, email:e.target.value})}/></div>
+                            <div className="form-group"><label>Mobile</label><input value={supplierForm.mobile || ''} onChange={e=>setSupplierForm({...supplierForm, mobile:e.target.value})}/></div>
+                            <div className="form-group"><label>Category</label><select value={supplierForm.category} onChange={e=>setSupplierForm({...supplierForm, category:e.target.value})}><option>Select...</option>{supplierCategories.map(c=><option key={c}>{c}</option>)}</select></div>
+                            <div className="form-group"><label>Address</label><input value={supplierForm.addr1 || ''} onChange={e=>setSupplierForm({...supplierForm, addr1:e.target.value})}/></div>
+                            <div className="form-group"><label>City</label><input value={supplierForm.city || ''} onChange={e=>setSupplierForm({...supplierForm, city:e.target.value})}/></div>
+                            <div className="form-group"><label>Brand</label><input value={supplierForm.brand || ''} onChange={e=>setSupplierForm({...supplierForm, brand:e.target.value})}/></div>
+                        </div>
+                        <div style={{textAlign:'right', marginTop:'20px'}}><button className="btn-primary" onClick={handleSaveSupplier}>Save</button></div>
+                    </>
+                )}
+            </div>
         </div>
       )}
-      
-      {/* 3. RECEIPT MODAL (Simplified for brevity, use previous code if needed) */}
-      {showReceipt && (
-          <div className="modal-overlay">
-             <div className="receipt-paper">
-                 <div className="receipt-header"><h3>CarePlus</h3><p>Receipt Generated</p></div>
-                 <button onClick={() => setShowReceipt(false)} style={{width:'100%', padding:'10px'}}>Close</button>
-             </div>
-          </div>
+
+      {/* MODAL: PURCHASE WIZARD */}
+      {showPurchaseWizard && (
+        <div className="modal-overlay">
+            <div className="modal-content" style={{width:'900px'}}>
+                <div className="modal-header"><h3>New Invoice (Step {purchaseStep}/3)</h3><button className="close-btn" onClick={()=>setShowPurchaseWizard(false)}><X/></button></div>
+                {purchaseStep === 1 && (
+                    <>
+                        <div className="form-grid" style={{gridTemplateColumns:'1fr 1fr 1fr'}}>
+                             <div className="form-group"><label>Supplier</label><select onChange={e=>setPurchaseForm({...purchaseForm, supplierId:e.target.value})}><option>Select...</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+                             <div className="form-group"><label>Invoice #</label><input onChange={e=>setPurchaseForm({...purchaseForm, supplierInvoiceNo:e.target.value})}/></div>
+                             <div className="form-group"><label>Date</label><input type="date" value={purchaseForm.date} onChange={e=>setPurchaseForm({...purchaseForm, date:e.target.value})}/></div>
+                        </div>
+                        <div style={{background:'#f8fafc', padding:'15px', borderRadius:'8px', margin:'20px 0'}}>
+                            <h4>Add Item</h4>
+                            <div className="form-grid" style={{gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr auto'}}>
+                                <input placeholder="Item" id="p_item"/><input placeholder="Exp" type="date" id="p_exp"/><input placeholder="Cost" type="number" id="p_cost"/><input placeholder="Qty" type="number" id="p_qty"/><input placeholder="VAT%" type="number" id="p_vat"/>
+                                <button className="btn-primary" onClick={()=>{ addPurchaseItem({ name: document.getElementById('p_item').value, cost: document.getElementById('p_cost').value, qty: document.getElementById('p_qty').value, vat: document.getElementById('p_vat').value }); }}><Plus/></button>
+                            </div>
+                        </div>
+                        <table className="modern-table"><thead><tr><th>Item</th><th>Cost</th><th>Qty</th><th>Total</th></tr></thead><tbody>{purchaseForm.items.map((it, i)=><tr key={i}><td>{it.name}</td><td>{it.cost}</td><td>{it.qty}</td><td>{it.final.toFixed(2)}</td></tr>)}</tbody></table>
+                        <div style={{marginTop:'20px', textAlign:'right'}}><button className="btn-primary" onClick={()=>setPurchaseStep(2)}>Next</button></div>
+                    </>
+                )}
+                {purchaseStep === 2 && (
+                    <div style={{textAlign:'center', padding:'30px'}}>
+                        <h3>Select Payment</h3>
+                        <div style={{display:'flex', gap:'10px', justifyContent:'center', margin:'20px 0'}}>{['Cash', 'Card', 'Transfer'].map(m=><button key={m} onClick={()=>setPurchaseForm({...purchaseForm, paymentMode:m})} style={{padding:'15px', border:'1px solid #ddd'}}>{m}</button>)}</div>
+                        <button className="btn-primary" disabled={!purchaseForm.paymentMode} onClick={()=>setPurchaseStep(3)}>Next</button>
+                    </div>
+                )}
+                {purchaseStep === 3 && (
+                    <div>
+                        <div style={{border:'1px solid #ddd', padding:'20px'}}><h2>Invoice Preview</h2><p>Total: ${purchaseForm.items.reduce((s,i)=>s+i.final,0).toFixed(2)}</p></div>
+                        <div style={{marginTop:'20px', textAlign:'right'}}><button className="btn-primary" onClick={submitPurchase}>Submit</button></div>
+                    </div>
+                )}
+            </div>
+        </div>
       )}
 
+      {/* MODAL: TENANT WIZARD */}
+      {showTenantWizard && (
+          <div className="modal-overlay">
+              <div className="modal-content">
+                  <div className="modal-header"><h3>Create Pharmacy Tenant</h3><button className="close-btn" onClick={()=>setShowTenantWizard(false)}><X/></button></div>
+                  <div className="form-grid">
+                      <div className="form-group"><label>Pharmacy Name</label><input onChange={e=>setTenantForm({...tenantForm, name:e.target.value})}/></div>
+                      <div className="form-group"><label>Admin Email</label><input type="email" onChange={e=>setTenantForm({...tenantForm, email:e.target.value})}/></div>
+                      <div className="form-group"><label>Plan</label><select onChange={e=>setTenantForm({...tenantForm, plan:e.target.value})}><option>STANDARD</option><option>ENTERPRISE</option></select></div>
+                  </div>
+                  <div style={{textAlign:'right', marginTop:'20px'}}><button className="btn-primary" onClick={handleCreateTenant}>Create</button></div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

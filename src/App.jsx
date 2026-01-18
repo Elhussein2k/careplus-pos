@@ -125,7 +125,17 @@ function MainApp({ session, userRole }) {
     setSupplierCategories(['Registered', 'Unregistered', 'International']);
   }, []);
 
-  async function handleLogout() { await supabase.auth.signOut(); }
+  async function handleLogout() {
+    // 1. Force state clear immediately (UI updates instantly)
+    setSession(null); 
+    setUserRole(null);
+    
+    // 2. Attempt Supabase logout in background
+    await supabase.auth.signOut();
+
+    // 3. Force a hard reload to clear any browser cache/memory
+    window.location.href = "/"; 
+  }
 
   // --- LOGIC: SUPPLIERS ---
   const handleSaveSupplier = () => {

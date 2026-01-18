@@ -126,15 +126,24 @@ function MainApp({ session, userRole }) {
   }, []);
 
   async function handleLogout() {
-    // 1. Force state clear immediately (UI updates instantly)
-    setSession(null); 
+    // 1. Immediate UI Feedback (Clear screen)
+    setSession(null);
     setUserRole(null);
-    
-    // 2. Attempt Supabase logout in background
-    await supabase.auth.signOut();
 
-    // 3. Force a hard reload to clear any browser cache/memory
-    window.location.href = "/"; 
+    // 2. "Nuclear" Option: Manually clear browser storage
+    // This wipes the Supabase session token so the page reload can't find it.
+    localStorage.clear(); 
+    sessionStorage.clear();
+
+    // 3. Attempt standard logout (don't wait for it if it hangs)
+    try {
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Logout error:", error);
+    }
+
+    // 4. Hard Redirect to Login
+    window.location.replace("/");
   }
 
   // --- LOGIC: SUPPLIERS ---

@@ -126,24 +126,20 @@ function MainApp({ session, userRole }) {
   }, []);
 
   async function handleLogout() {
-    // 1. Immediate UI Feedback (Clear screen)
-    setSession(null);
-    setUserRole(null);
-
-    // 2. "Nuclear" Option: Manually clear browser storage
-    // This wipes the Supabase session token so the page reload can't find it.
-    localStorage.clear(); 
-    sessionStorage.clear();
-
-    // 3. Attempt standard logout (don't wait for it if it hangs)
+    // 1. Clear Supabase Session (Wait for it, but don't block if it fails)
     try {
-        await supabase.auth.signOut();
+      await supabase.auth.signOut();
     } catch (error) {
-        console.error("Logout error:", error);
+      console.error("Error signing out:", error);
     }
 
-    // 4. Hard Redirect to Login
-    window.location.replace("/");
+    // 2. Manually clear all browser storage keys
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // 3. Reset State -> This switches the screen to Login immediately
+    setSession(null);
+    setUserRole(null);
   }
 
   // --- LOGIC: SUPPLIERS ---
@@ -324,9 +320,11 @@ function MainApp({ session, userRole }) {
           )}
         </nav>
         
-        {/* LOGOUT */}
-        <div style={{padding: '20px', borderTop:'1px solid #333a48'}}>
-            <div className="nav-item" onClick={handleLogout} style={{color: '#ef4444'}}><LogOut size={18} className="nav-icon"/> Sign Out</div>
+  {/* LOGOUT BUTTON */}
+  <div style={{padding: '20px', borderTop:'1px solid #333a48'}}>
+            <div className="nav-item" onClick={handleLogout} style={{color: '#ef4444'}}>
+                <LogOut size={18} className="nav-icon"/> Log Out {/* Changed text to verify update */}
+            </div>
         </div>
       </aside>
       

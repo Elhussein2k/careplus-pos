@@ -1,10 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
-// Your Project URL (Now with correct quotes)
-const supabaseUrl = 'https://wkqittxnhepkdgvpuavv.supabase.co'
+// Use environment variables (Best Practice)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Your Public API Key (Now with correct quotes)
-const supabaseKey = 'sb_publishable_B_9L1cZ7-LffiYSYrr3JSw_HtkxzvaH'
-
-// Create and export the connection
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true, // This is CRITICAL for the logout fix
+    autoRefreshToken: true,
+  }
+});
